@@ -1,14 +1,58 @@
-var express = require('express');//Importing Express
-var app = express();//Getting App From Express
-const port = 8080;//Creating A Constant For Providing The Port
-app.listen(port,'127.0.0.1');//Telling Express App To Listen To Port
-//Routing Request : http://localhost:port/
-app.get('/',function(request,response){
-  //Telling Browser That The File Provided Is A HTML File
-  response.writeHead(200,{"Content-Type":"text/html"});
-  //Passing HTML To Browser
-  response.write("The Server Is <strong>Working</strong>!");
-  //Ending Response
-  response.end();
-})
-console.log("Server Running At:localhost:"+port);
+const http = require('http');
+const path = require('path');
+const express = require('express');
+const socketio = require('socket.io');
+const parseArgs = require('minimist');
+const fs = require('fs');
+
+const app = express();
+const server = http.createServer(app);
+const io = socketio(server);
+
+const args = parseArgs(process.argv.slice(2));
+const { name = 'default', port = '8080'} = args;
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/test', (req, res) => {
+  res.json({
+    headers: req.headers,
+    address: req.connection.remoteAddress
+  });
+});
+
+app.get('/api/name', (req, res) => {
+  res.json({ name });
+});
+
+app.get('/api/file', (req, res) => {
+  fs.readFile(`${__dirname}/version.txt`, 'utf8', (err, version) => {
+    res.json({
+      version,
+      dirname: __dirname,
+      cwd: process.cwd()
+    });
+  });
+});
+
+io.on('connection', (sock) => {
+  console.log('Client connected');
+
+  sock.on('heartbeat', (payload) => {
+    payload.nodeName = name;
+    sock.emit('heartbeat', payload);
+  });
+
+  sock.on('disconnect', () => {
+    console.log('Socket Disconnected');
+  });
+});
+
+server.listen(+port, '127.0.0.1', (err) => {
+  if (err) {
+    console.log(err.stack);
+    return;
+  }
+
+  console.log(`Node [${name}] listens on http://127.0.0.1:${port}.`);
+});
